@@ -58,10 +58,10 @@ setup(
     author_email="jose.riguera@springer.com",
     license='MIT',
     packages=find_packages(exclude=['docs', 'tests']),
-    download_url="https://github.com/SpringerPE/bosh-ansible-inventory/releases/tag/0.1.0",
+    download_url="https://github.com/SpringerPE/bosh-ansible-inventory/releases/tag/0.1.1",
 
     # Include additional files into the package
-    include_package_data=False,
+    include_package_data=True,
 
     # additional files need to be installed into
     data_files=[],
