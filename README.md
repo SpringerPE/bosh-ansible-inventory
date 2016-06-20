@@ -3,9 +3,20 @@ Ansible dynamic inventory
 
 # Usage
 
+You can install it by running `setup.py`:
 ```
-./bosh-inventory.py  --help
-usage: bosh-inventory.py [-h] [--list]
+$ python setup.py install
+```
+
+Also, you can copy and run it directly by calling the program 
+`bosh_inventory.py` instead of `bosh-inventory`.
+
+
+Once it is installed:
+
+```
+$ bosh-inventory  --help
+usage: bosh-inventory [-h] [--list]
 
 Program to create an ansible inventory from all the deployments, jobs and
 instances managed by a BOSH Director.
@@ -20,22 +31,54 @@ from the file. You can define additional inventory parameters with
 BOSH_ANSIBLE_INVENTORY_PARAMS environment variable, for example:
 BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap ansible_ssh_pass=blabla"
 
-v0.1.0, 2016 Jose Riguera <jose.riguera@springer-sbm.com>
+You can also limit the inventory to one deployment by setting the value
+of the environment variable BOSH_ANSIBLE_DEPLOYMENT to the name of it.
+
+0.1.0, 2016 Jose Riguera <jose.riguera@springer-sbm.com>
 ```
 
+To use it, just point the env variable `BOSH_CONFIG` to your
+bosh configuration. It will read all parameters from there.
 
-In order to get an INI format inventory:
+
+By default, it will return an INI format inventory:
 ```
-export BOSH_CONFIG=~/.bosh-dev
-./bosh-inventory.py > inventory
+$ export BOSH_CONFIG=~/.bosh-dev
+$ bosh-inventory > ansible-inventory
 ```
 
 Or using directly with ansible:
 ```
-export BOSH_CONFIG=~/.bosh-dev
-export BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap"                                                                                                  
-ansible -vvvv firehose-to-syslog-0  -i ./bosh-inventory.py  -m ping
+$ export BOSH_CONFIG=~/.bosh-dev
+$ export BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap"                                                                                                  
+$ ansible -vvvv firehose-to-syslog-0  -i bosh-inventory.py  -m ping
 ```
 
+You can also point to one deployment by using `BOSH_ANSIBLE_DEPLOYMENT`,
+and only those instances will appear:
+```
+$ export BOSH_ANSIBLE_DEPLOYMENT=concourse
+$ bosh-inventory
+[all:children]
+concourse
+
+[concourse:children]
+web
+worker
+db
+
+[web]
+web-0 ansible_host=10.10.10.64 ansible_user=vcap
+
+[worker]
+worker-0 ansible_host=10.10.10.66 ansible_user=vcap
+worker-1 ansible_host=10.10.10.67 ansible_user=vcap
+
+[db]
+db-0 ansible_host=10.10.10.65 ansible_user=vcap
+
+```
+
+
 # Author
-Jose Riguera Lopez
+Jose Riguera Lopez (jose.riguera@springer.com)
