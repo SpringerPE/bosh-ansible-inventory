@@ -8,7 +8,7 @@ instances managed by a BOSH Director.
 from __future__ import unicode_literals, print_function
 
 __program__ = "bosh-inventory"
-__version__ = "v0.1.0"
+__version__ = "0.1.0"
 __author__ = "Jose Riguera"
 __year__ = "2016"
 __email__ = "<jose.riguera@springer-sbm.com>"
@@ -19,20 +19,23 @@ pointing to the configuration file used by Bosh. It will read the credentials
 from the file. You can define additional inventory parameters with
 BOSH_ANSIBLE_INVENTORY_PARAMS environment variable, for example:
 BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap ansible_ssh_pass=blabla"
+
+You can also limit the inventory to one deployment by setting the value
+of the environment variable BOSH_ANSIBLE_DEPLOYMENT to the name of it.
 """
 import sys
 import os
 import time
 import argparse
-import urllib3
-urllib3.disable_warnings()
-
-from urlparse import urlparse
-from collections import OrderedDict
 import json
 import yaml
 import requests
 import StringIO
+from urlparse import urlparse
+from collections import OrderedDict
+import requests
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 
 
@@ -77,13 +80,15 @@ def get_deployments(session, api):
     return result
 
 
-def create_inventory(session, api, params=[]):
+def create_inventory(session, api, target_deployment=None, params=[]):
     deployments = get_deployments(session, api)
     inventory = OrderedDict()
     inventory["_meta"] = {}
     inventory["_meta"]["hostvars"] = {}
     for deployment in deployments:
         name = deployment['name']
+        if target_deployment and target_deployment != name:
+            continue
         inventory[name] = {}
         inventory[name]["children"] = []
         instances = get_instances(session, api, deployment)
@@ -104,17 +109,19 @@ def create_inventory(session, api, params=[]):
                 inventory["_meta"]["hostvars"][entry]['ansible_host'] = instance['ips'][0]
             inventory[job]["hosts"].append(entry)
             for item in params:
-                param = item.split('=') 
+                param = item.split('=')
                 inventory["_meta"]["hostvars"][entry][param[0]] = param[1]
     return json.dumps(inventory, sort_keys=False, indent=2)
 
 
-def create_ini(session, api, params=[]):
+def create_ini(session, api, target_deployment=None, params=[]):
     deployments = get_deployments(session, api)
     inventory = OrderedDict()
     inventory["[all:children]"] = []
     for deployment in deployments:
         name = deployment['name']
+        if target_deployment and target_deployment != name:
+            continue
         inventory["[all:children]"].append(name)
         inventory["[%s:children]" % name] = []
         instances = get_instances(session, api, deployment)
@@ -169,6 +176,7 @@ def main():
     password = bosh_config['auth'][target]['password']
     # Read other parameters for the inventory
     inventory_params = os.getenv('BOSH_ANSIBLE_INVENTORY_PARAMS', '').split()
+    target_deployment = os.getenv('BOSH_ANSIBLE_DEPLOYMENT', None)
     # create a session
     session = requests.Session()
     session.auth = (username, password)
@@ -176,9 +184,13 @@ def main():
     session.cert = ca_cert if ca_cert else None
     # Doing the job
     if args.list:
-        print(create_inventory(session, target, inventory_params))
+        print(create_inventory(
+            session, target, target_deployment, inventory_params)
+        )
     else:
-        print(create_ini(session, target, inventory_params))
+        print(create_ini(
+            session, target, target_deployment, inventory_params)
+        )
     sys.exit(0)
 
 
