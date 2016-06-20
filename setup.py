@@ -74,8 +74,8 @@ setup(
         #   5 - Production/Stable
         'Development Status :: 4 - Beta',
         # Indicate who your project is intended for
-        'Intended Audience :: Bosh',
-        'Topic :: Infrastructure Management :: Build Tools',
+        'Intended Audience :: System Administrators',
+        'Topic :: System :: Systems Administration',
         # Pick your license as you wish (should match "license" above)
         'License :: OSI Approved :: MIT License',
         # Specify the Python versions you support here. In particular, ensure
