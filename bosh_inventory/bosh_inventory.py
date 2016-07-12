@@ -19,6 +19,8 @@ pointing to the configuration file used by Bosh. It will read the credentials
 from the file. You can define additional inventory parameters with
 BOSH_ANSIBLE_INVENTORY_PARAMS environment variable, for example:
 BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap ansible_ssh_pass=blabla"
+Be aware that Python is not present in the default location, but you can
+use this variable to specify "ansible_python_interpreter=/path/to/python".
 
 The program will include the IP of each vm if DNS is not defined. To force 
 always the inclusion of the IP in the inventory, just define the variable
