@@ -40,7 +40,7 @@ disable the feature.
 You can also limit the inventory to one deployment by setting the value
 of the environment variable BOSH_ANSIBLE_DEPLOYMENT to the name of it.
 
-0.2.0, 2016 Jose Riguera <jose.riguera@springer-sbm.com>
+0.2.1, 2016 Jose Riguera <jose.riguera@springer-sbm.com>
 ```
 
 To use it, just point the env variable `BOSH_CONFIG` to your
@@ -57,6 +57,7 @@ Or using directly with ansible:
 ```
 $ export BOSH_CONFIG=~/.bosh-dev
 $ export BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap"
+$ export BOSH_ANSIBLE_INVENTORY_IP="1"
 $ ansible -vvvv firehose-to-syslog-0  -i bosh-inventory.py  -m ping
 ```
 
@@ -84,6 +85,9 @@ worker-1 ansible_host=10.10.10.67 ansible_user=vcap
 db-0 ansible_host=10.10.10.65 ansible_user=vcap
 
 ```
+
+Be aware that python is not present in the default location, but you can 
+define it by using `BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_python_interpreter=/path/to/python"`
 
 
 # Author
