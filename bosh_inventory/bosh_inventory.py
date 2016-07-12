@@ -8,7 +8,7 @@ instances managed by a BOSH Director.
 from __future__ import unicode_literals, print_function
 
 __program__ = "bosh-inventory"
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 __author__ = "Jose Riguera"
 __year__ = "2016"
 __email__ = "<jose.riguera@springer-sbm.com>"
@@ -19,6 +19,12 @@ pointing to the configuration file used by Bosh. It will read the credentials
 from the file. You can define additional inventory parameters with
 BOSH_ANSIBLE_INVENTORY_PARAMS environment variable, for example:
 BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap ansible_ssh_pass=blabla"
+
+The program will include the IP of each vm if DNS is not defined. To force 
+always the inclusion of the IP in the inventory, just define the variable
+BOSH_ANSIBLE_INVENTORY_IP as a positive integer indicating the index (starting
+from 1) of the IP which will be taken (for VMs with multiple IPs), 0 will
+disable the feature.
 
 You can also limit the inventory to one deployment by setting the value
 of the environment variable BOSH_ANSIBLE_DEPLOYMENT to the name of it.
@@ -80,7 +86,7 @@ def get_deployments(session, api):
     return result
 
 
-def create_inventory(session, api, target_deployment=None, params=[]):
+def create_inventory(session, api, target_deployment=None, ip=1, params=[]):
     deployments = get_deployments(session, api)
     inventory = OrderedDict()
     inventory["_meta"] = {}
@@ -100,9 +106,13 @@ def create_inventory(session, api, target_deployment=None, params=[]):
                 inventory[name]["children"].append(job)
             if not 'hosts' in inventory[job]:
                 inventory[job]["hosts"] = []
+            # With ip, where ip represents an index in the list
+            # If it is zero, it is disabled.
             try:
                 entry = instance['dns'][0]
                 inventory["_meta"]["hostvars"][entry] = {}
+                if ip:
+                    inventory["_meta"]["hostvars"][entry]['ansible_host'] = instance['ips'][ip - 1]
             except:
                 entry = job + '-' + str(instance['index'])
                 inventory["_meta"]["hostvars"][entry] = {}
@@ -114,7 +124,7 @@ def create_inventory(session, api, target_deployment=None, params=[]):
     return json.dumps(inventory, sort_keys=False, indent=2)
 
 
-def create_ini(session, api, target_deployment=None, params=[]):
+def create_ini(session, api, target_deployment=None, ip=1, params=[]):
     deployments = get_deployments(session, api)
     inventory = OrderedDict()
     inventory["[all:children]"] = []
@@ -131,8 +141,12 @@ def create_ini(session, api, target_deployment=None, params=[]):
             if job_key not in inventory:
                 inventory[job_key] = []
                 inventory["[%s:children]" % name].append(job)
+            # With ip, where ip represents an index in the list
+            # If it is zero, it will be disabled disabled.
             try:
                 entry = instance['dns'][0]
+                if ip:
+                    entry = entry + ' ansible_host=' + instance['ips'][ip - 1]
             except:
                 dns = job + '-' + str(instance['index'])
                 entry = dns + ' ansible_host=' + instance['ips'][0]
@@ -177,6 +191,12 @@ def main():
     # Read other parameters for the inventory
     inventory_params = os.getenv('BOSH_ANSIBLE_INVENTORY_PARAMS', '').split()
     target_deployment = os.getenv('BOSH_ANSIBLE_DEPLOYMENT', None)
+    try:
+        inventory_ip = abs(int(os.getenv('BOSH_ANSIBLE_INVENTORY_IP', '0')))
+    except:
+        msg = "BOSH_ANSIBLE_INVENTORY_IP should be a positive integer, 0 to disable"
+        print("ERROR: " + msg, file=sys.stderr)
+        inventory_ip = 0
     # create a session
     session = requests.Session()
     session.auth = (username, password)
@@ -185,11 +205,11 @@ def main():
     # Doing the job
     if args.list:
         print(create_inventory(
-            session, target, target_deployment, inventory_params)
+            session, target, target_deployment, inventory_ip, inventory_params)
         )
     else:
         print(create_ini(
-            session, target, target_deployment, inventory_params)
+            session, target, target_deployment, inventory_ip, inventory_params)
         )
     sys.exit(0)
 
