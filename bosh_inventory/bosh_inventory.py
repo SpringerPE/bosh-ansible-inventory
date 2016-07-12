@@ -8,7 +8,7 @@ instances managed by a BOSH Director.
 from __future__ import unicode_literals, print_function
 
 __program__ = "bosh-inventory"
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __author__ = "Jose Riguera"
 __year__ = "2016"
 __email__ = "<jose.riguera@springer-sbm.com>"
@@ -110,13 +110,17 @@ def create_inventory(session, api, target_deployment=None, ip=1, params=[]):
             # If it is zero, it is disabled.
             try:
                 entry = instance['dns'][0]
-                inventory["_meta"]["hostvars"][entry] = {}
-                if ip:
-                    inventory["_meta"]["hostvars"][entry]['ansible_host'] = instance['ips'][ip - 1]
             except:
                 entry = job + '-' + str(instance['index'])
-                inventory["_meta"]["hostvars"][entry] = {}
-                inventory["_meta"]["hostvars"][entry]['ansible_host'] = instance['ips'][0]
+            inventory["_meta"]["hostvars"][entry] = {}
+            if ip:
+                try:
+                    inv_ip = instance['ips'][ip - 1]
+                except:
+                    msg = "IP index out of range (%s) for %s" % (ip-1, entry)
+                    print("WARNING: " + msg, file=sys.stderr)
+                    inv_ip = instance['ips'][0]
+                inventory["_meta"]["hostvars"][entry]['ansible_host'] = inv_ip
             inventory[job]["hosts"].append(entry)
             for item in params:
                 param = item.split('=')
@@ -145,11 +149,15 @@ def create_ini(session, api, target_deployment=None, ip=1, params=[]):
             # If it is zero, it will be disabled disabled.
             try:
                 entry = instance['dns'][0]
-                if ip:
-                    entry = entry + ' ansible_host=' + instance['ips'][ip - 1]
             except:
-                dns = job + '-' + str(instance['index'])
-                entry = dns + ' ansible_host=' + instance['ips'][0]
+                entry = job + '-' + str(instance['index'])
+            if ip:
+                try:
+                    entry = entry + ' ansible_host=' + instance['ips'][ip - 1]
+                except:
+                    msg = "IP index out of range (%s) for %s" % (ip-1, entry)
+                    print("WARNING: " + msg, file=sys.stderr)
+                    entry = entry + ' ansible_host=' + instance['ips'][0]
             entry = entry + ' ' + ' '.join(params)
             inventory[job_key].append(entry)
     output = StringIO.StringIO()
@@ -194,7 +202,7 @@ def main():
     try:
         inventory_ip = abs(int(os.getenv('BOSH_ANSIBLE_INVENTORY_IP', '0')))
     except:
-        msg = "BOSH_ANSIBLE_INVENTORY_IP should be a positive integer, 0 to disable"
+        msg = "BOSH_ANSIBLE_INVENTORY_IP must be positive integer, 0 to disable"
         print("ERROR: " + msg, file=sys.stderr)
         inventory_ip = 0
     # create a session
