@@ -31,10 +31,16 @@ from the file. You can define additional inventory parameters with
 BOSH_ANSIBLE_INVENTORY_PARAMS environment variable, for example:
 BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap ansible_ssh_pass=blabla"
 
+The program will include the IP of each vm if DNS is not defined. To force 
+always the inclusion of the IP in the inventory, just define the variable
+BOSH_ANSIBLE_INVENTORY_IP as a positive integer indicating the index (starting
+from 1) of the IP which will be taken (for VMs with multiple IPs), 0 will
+disable the feature.
+
 You can also limit the inventory to one deployment by setting the value
 of the environment variable BOSH_ANSIBLE_DEPLOYMENT to the name of it.
 
-0.1.0, 2016 Jose Riguera <jose.riguera@springer-sbm.com>
+0.2.0, 2016 Jose Riguera <jose.riguera@springer-sbm.com>
 ```
 
 To use it, just point the env variable `BOSH_CONFIG` to your
@@ -50,7 +56,7 @@ $ bosh-inventory > ansible-inventory
 Or using directly with ansible:
 ```
 $ export BOSH_CONFIG=~/.bosh-dev
-$ export BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap"                                                                                                  
+$ export BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap"
 $ ansible -vvvv firehose-to-syslog-0  -i bosh-inventory.py  -m ping
 ```
 
