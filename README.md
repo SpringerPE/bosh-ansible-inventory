@@ -90,5 +90,59 @@ Be aware that python is not present in the default location, but you can
 define it by using `BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_python_interpreter=/path/to/python"`
 
 
+# Example: apply a playbook to all CF runners
+
+First of all, make sure your bosh client is targeting the correct Bosh Director!!!!
+
+```
+bosh status
+
+https://x.x.x.x:25555
+Config
+             /home/jriguera/.bosh_config
+
+Director
+  Name       devBosh2
+  URL        https://x.x.x.x:25555
+  Version    1.3232.6.0 (00000000)
+  User       admin
+  UUID       c4f5c583-1bc3-427f-8ded-b3f5e107f970
+  CPI        vsphere
+  dns        enabled (domain_name: microbosh)
+  compiled_package_cache disabled
+  snapshots  disabled
+
+Deployment
+  not set
+```
+
+Type `bosh vms --details` to confirm!
+
+`bosh-inventory` needs some variables to work:
+
+```
+# Point to the bosh config targeting the desired director!
+export BOSH_CONFIG=~/.bosh_config
+# Define the name of the deployment (to avoid getting other vms)
+export BOSH_ANSIBLE_DEPLOYMENT=dev
+# Foce the use of IPs (instead of DNS names if bosh has enabled dns)
+export BOSH_ANSIBLE_INVENTORY_IP="1"
+# Define the ssh user and other ansible parameters
+export BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=nsaadmin  host_key_checking=false"
+```
+
+Check if it is working:
+
+```
+ansible runner_z1  -i /usr/local/bin/bosh-inventory   -m ping
+```
+
+If so, just run the playbook.
+
+```
+ansible-playbook -i /usr/local/bin/bosh-inventory  cf-warden.yml
+```
+
+
 # Author
 Jose Riguera Lopez (jose.riguera@springer.com)
