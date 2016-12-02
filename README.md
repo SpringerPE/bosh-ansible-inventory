@@ -1,5 +1,6 @@
 # bosh-ansible-inventory
-Ansible dynamic inventory
+
+Ansible 2 dynamic inventory
 
 # Usage
 
@@ -40,7 +41,7 @@ disable the feature.
 You can also limit the inventory to one deployment by setting the value
 of the environment variable BOSH_ANSIBLE_DEPLOYMENT to the name of it.
 
-0.2.1, 2016 Jose Riguera <jose.riguera@springer-sbm.com>
+0.2.2, 2016 Jose Riguera <jose.riguera@springer.com>
 ```
 
 To use it, just point the env variable `BOSH_CONFIG` to your
@@ -58,7 +59,7 @@ Or using directly with ansible:
 $ export BOSH_CONFIG=~/.bosh-dev
 $ export BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap"
 $ export BOSH_ANSIBLE_INVENTORY_IP="1"
-$ ansible -vvvv firehose-to-syslog-0  -i bosh-inventory.py  -m ping
+$ ansible "runner_z*" -i $(which bosh-inventory) -a "sudo /sbin/reboot"
 ```
 
 You can also point to one deployment by using `BOSH_ANSIBLE_DEPLOYMENT`,
@@ -145,4 +146,5 @@ ansible-playbook -i /usr/local/bin/bosh-inventory  cf-warden.yml
 
 
 # Author
-Jose Riguera Lopez (jose.riguera@springer.com)
+
+Springer Nature Platform Engineering, Jose Riguera Lopez (jose.riguera@springer.com)
