@@ -9,6 +9,12 @@ You can install it by running `setup.py`:
 $ python setup.py install
 ```
 
+or using `pip`:
+
+```
+$ pip install bosh_inventory
+```
+
 Also, you can copy and run it directly by calling the program 
 `bosh_inventory.py` instead of `bosh-inventory`.
 
