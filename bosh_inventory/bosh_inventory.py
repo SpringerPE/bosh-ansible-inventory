@@ -205,7 +205,6 @@ def main():
             bosh_config = yaml.load(stream)
     except Exception as e:
         print("ERROR loading environment variable BOSH_CONFIG: %s" % str(e), file=sys.stderr)
-        parser.print_help()
         sys.exit(1)
     target = bosh_config['target']
     ca_cert = bosh_config['ca_cert'][target]
