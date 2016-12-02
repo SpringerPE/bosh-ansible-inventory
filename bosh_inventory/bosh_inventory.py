@@ -8,10 +8,10 @@ instances managed by a BOSH Director.
 from __future__ import unicode_literals, print_function
 
 __program__ = "bosh-inventory"
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 __author__ = "Jose Riguera"
 __year__ = "2016"
-__email__ = "<jose.riguera@springer-sbm.com>"
+__email__ = "<jose.riguera@springer.com>"
 __license__ = "MIT"
 __purpose__ = """
 In order to use it, you have to define BOSH_CONFIG environment variable
@@ -38,10 +38,20 @@ import argparse
 import json
 import yaml
 import requests
-import StringIO
-from urlparse import urlparse
 from collections import OrderedDict
-import requests
+try:
+    # Python 3.x
+    from io import StringIO
+except ImportError:
+    # Python 2.x
+    from StringIO import StringIO
+try:
+    # Python 3.x
+    from urllib.parse import urlparse
+except ImportError:
+    # Python 2.x
+    from urlparse import urlparse
+# Disable HTTPS warning with self signed certs
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
@@ -157,12 +167,15 @@ def create_ini(session, api, target_deployment=None, ip=1, params=[]):
                 try:
                     entry = entry + ' ansible_host=' + instance['ips'][ip - 1]
                 except:
-                    msg = "IP index out of range (%s) for %s" % (ip-1, entry)
+                    msg = "IP index %d not found for %s" % (ip-1, entry)
                     print("WARNING: " + msg, file=sys.stderr)
-                    entry = entry + ' ansible_host=' + instance['ips'][0]
+                    try:
+                        entry = entry + ' ansible_host=' + instance['ips'][0]
+                    except:
+                        print("WARNING: IP not found for %s" % (entry), file=sys.stderr)
             entry = entry + ' ' + ' '.join(params)
             inventory[job_key].append(entry)
-    output = StringIO.StringIO()
+    output = StringIO()
     for key in inventory:
         items = inventory[key]
         print(key, file=output)
@@ -190,8 +203,8 @@ def main():
         bosh_config_file = os.environ['BOSH_CONFIG']
         with open(bosh_config_file, 'r') as stream:
             bosh_config = yaml.load(stream)
-    except:
-        print('ERROR: BOSH_CONFIG not defined!', file=sys.stderr)
+    except Exception as e:
+        print("ERROR loading environment variable BOSH_CONFIG: %s" % str(e), file=sys.stderr)
         parser.print_help()
         sys.exit(1)
     target = bosh_config['target']
