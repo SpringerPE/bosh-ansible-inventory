@@ -72,7 +72,7 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable'
         # Indicate who your project is intended for
         'Intended Audience :: System Administrators',
         'Topic :: System :: Systems Administration',
@@ -81,6 +81,7 @@ setup(
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
         'Programming Language :: Python :: 2.7'
+        'Programming Language :: Python :: 3'
     ],
 
     # Dependent packages (distributions)
