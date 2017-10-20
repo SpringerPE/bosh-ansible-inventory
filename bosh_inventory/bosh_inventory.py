@@ -8,9 +8,9 @@ instances managed by a BOSH Director.
 from __future__ import unicode_literals, print_function
 
 __program__ = "bosh-inventory"
-__version__ = "0.2.2"
+__version__ = "0.3.0"
 __author__ = "Jose Riguera"
-__year__ = "2016"
+__year__ = "2017"
 __email__ = "<jose.riguera@springer.com>"
 __license__ = "MIT"
 __purpose__ = """
@@ -22,11 +22,31 @@ BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap ansible_ssh_pass=blabla"
 Be aware that Python is not present in the default location, but you can
 use this variable to specify "ansible_python_interpreter=/path/to/python".
 
-The program will include the IP of each vm if DNS is not defined. To force 
-always the inclusion of the IP in the inventory, just define the variable
-BOSH_ANSIBLE_INVENTORY_IP as a positive integer indicating the index (starting
-from 1) of the IP which will be taken (for VMs with multiple IPs), 0 will
-disable the feature.
+The environment variable BOSH_ANSIBLE_INVENTORY_VARS defines a list of
+entries which can appear in the inventory as variables for each VM. The
+list of values is here:
+https://bosh.io/docs/director-api-v1.html#list-instances-detailed,
+for example BOSH_ANSIBLE_INVENTORY_VARS="state bootstrap" will add
+"state=started bootstrap=false" to each inventory entry.
+
+The environment variable BOSH_ANSIBLE_INVENTORY_INSTANCES, defines the name will
+appear in the inventory. If it 'dns' it will build the inventory with the
+dns names given by Bosh Director, if 'vm_cid' (default) it will be using the
+name of the VM as it is in the IaaS. You can see all parameters supported in
+https://bosh.io/docs/director-api-v1.html#list-instances-detailed
+
+In case of 'dns' the IP of each vm will be include if DNS is not defined in
+Bosh Director. To force always the inclusion of the IP in the inventory, 
+just define the variable BOSH_ANSIBLE_INVENTORY_IP as a positive integer 
+indicating the index (starting from 1) of the IP which will be taken 
+(for VMs with multiple IPs), 0 will disable the feature.
+
+BOSH_ANSIBLE_INVENTORY_CALL can be 'instances'(default) or 'vms'. 
+Instances is faster because it does not query the Bosh Agents, it gets the
+desired state. 'vms' will query the Bosh Agents in order to result the current
+state, so depending on the situation, it can take a lot of time to get the
+result. 'instances' includes references to errand jobs, but 'vms' will only show
+vms runnign on the IaaS.
 
 You can also limit the inventory to one deployment by setting the value
 of the environment variable BOSH_ANSIBLE_DEPLOYMENT to the name of it.
@@ -44,7 +64,8 @@ try:
     from io import StringIO
 except ImportError:
     # Python 2.x
-    from StringIO import StringIO
+    #from StringIO import StringIO
+    from io import BytesIO as StringIO
 try:
     # Python 3.x
     from urllib.parse import urlparse
@@ -57,9 +78,9 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 
 
-def get_instances(session, api, deployment, timeout=60):
+def get_instances(session, api, deployment, method, timeout=60):
     result = []
-    instances_url = api + '/deployments/{name}/vms'
+    instances_url = api + '/deployments/{name}/' + str(method)
     instances_url = instances_url.format(**deployment)
     instances_req = session.get(instances_url,
         params={'format': 'full'},
@@ -98,7 +119,9 @@ def get_deployments(session, api):
     return result
 
 
-def create_inventory(session, api, target_deployment=None, ip=1, params=[]):
+def create_inventory(session, api, target_deployment=None, ip=1,
+                     inventory_instances='dns', variables=[], params=[],
+                     method="instances"):
     deployments = get_deployments(session, api)
     inventory = OrderedDict()
     inventory["_meta"] = {}
@@ -109,38 +132,50 @@ def create_inventory(session, api, target_deployment=None, ip=1, params=[]):
             continue
         inventory[name] = {}
         inventory[name]["children"] = []
-        instances = get_instances(session, api, deployment)
+        instances = get_instances(session, api, deployment, method)
         for instance in json.loads(instances):
-            job = instance['job_name']
+            job = str(instance['job_name'])
             if job not in inventory:
                 inventory[job] = {}
                 inventory[job]["children"] = []
                 inventory[name]["children"].append(job)
             if not 'hosts' in inventory[job]:
                 inventory[job]["hosts"] = []
-            # With ip, where ip represents an index in the list
-            # If it is zero, it is disabled.
-            try:
-                entry = instance['dns'][0]
-            except:
-                entry = job + '-' + str(instance['index'])
-            inventory["_meta"]["hostvars"][entry] = {}
-            if ip:
+            # check if the job has a proper vm
+            if instance['vm_cid'] != None:
+                # With ip, where ip represents an index in the list
+                # If it is zero, it is disabled.
                 try:
-                    inv_ip = instance['ips'][ip - 1]
+                    if isinstance(instance[inventory_instances], list):
+                        entry = str(instance[inventory_instances][0])
+                    else:
+                        entry = str(instance[inventory_instances])
                 except:
-                    msg = "IP index out of range (%s) for %s" % (ip-1, entry)
-                    print("WARNING: " + msg, file=sys.stderr)
-                    inv_ip = instance['ips'][0]
-                inventory["_meta"]["hostvars"][entry]['ansible_host'] = inv_ip
-            inventory[job]["hosts"].append(entry)
-            for item in params:
-                param = item.split('=')
-                inventory["_meta"]["hostvars"][entry][param[0]] = param[1]
+                    entry = job + '-' + str(instance['index'])
+                inventory["_meta"]["hostvars"][entry] = {}
+                if ip:
+                    try:
+                        inv_ip = instance['ips'][ip - 1]
+                    except:
+                        msg = "IP index out of range (%s) for %s" % (ip-1, entry)
+                        print("WARNING: " + msg, file=sys.stderr)
+                        inv_ip = instance['ips'][0]
+                    inventory["_meta"]["hostvars"][entry]['ansible_host'] = inv_ip
+                inventory[job]["hosts"].append(entry)
+                for variable in variables:
+                    try:
+                        inventory["_meta"]["hostvars"][entry][str(variable)] = str(instance[variable])
+                    except:
+                        pass
+                for item in params:
+                    param = item.split('=')
+                    inventory["_meta"]["hostvars"][entry][param[0]] = param[1]
     return json.dumps(inventory, sort_keys=False, indent=2)
 
 
-def create_ini(session, api, target_deployment=None, ip=1, params=[]):
+def create_ini(session, api, target_deployment=None, ip=1,
+               inventory_instances='dns', variables=[], params=[],
+               method="instances"):
     deployments = get_deployments(session, api)
     inventory = OrderedDict()
     inventory["[all:children]"] = []
@@ -150,37 +185,47 @@ def create_ini(session, api, target_deployment=None, ip=1, params=[]):
             continue
         inventory["[all:children]"].append(name)
         inventory["[%s:children]" % name] = []
-        instances = get_instances(session, api, deployment)
+        instances = get_instances(session, api, deployment, method)
         for instance in json.loads(instances):
-            job = instance['job_name']
+            job = str(instance['job_name'])
             job_key = "[%s]" % job
             if job_key not in inventory:
                 inventory[job_key] = []
                 inventory["[%s:children]" % name].append(job)
-            # With ip, where ip represents an index in the list
-            # If it is zero, it will be disabled disabled.
-            try:
-                entry = instance['dns'][0]
-            except:
-                entry = job + '-' + str(instance['index'])
-            if ip:
+            # check if the job has a proper vm
+            if instance['vm_cid'] != None:
+                # With ip, where ip represents an index in the list
+                # If it is zero, it will be disabled disabled.
                 try:
-                    entry = entry + ' ansible_host=' + instance['ips'][ip - 1]
+                    if isinstance(instance[inventory_instances], list):
+                        entry = instance[inventory_instances][0]
+                    else:
+                        entry = instance[inventory_instances]
                 except:
-                    msg = "IP index %d not found for %s" % (ip-1, entry)
-                    print("WARNING: " + msg, file=sys.stderr)
+                    entry = job + '-' + str(instance['index'])
+                if ip:
                     try:
-                        entry = entry + ' ansible_host=' + instance['ips'][0]
+                        entry = entry + ' ansible_host=' + instance['ips'][ip - 1]
                     except:
-                        print("WARNING: IP not found for %s" % (entry), file=sys.stderr)
-            entry = entry + ' ' + ' '.join(params)
-            inventory[job_key].append(entry)
+                        msg = "IP index %d not found for %s" % (ip-1, entry)
+                        print("WARNING: " + msg, file=sys.stderr)
+                        try:
+                            entry = entry + ' ansible_host=' + instance['ips'][0]
+                        except:
+                            print("WARNING: IP not found for %s" % (entry), file=sys.stderr)
+                for variable in variables:
+                    try:
+                        entry = entry + " %s='%s'" % (variable, instance[variable])
+                    except:
+                        pass
+                entry = entry + ' ' + ' '.join(params)
+                inventory[job_key].append(entry)
     output = StringIO()
     for key in inventory:
         items = inventory[key]
-        print(key, file=output)
+        print(key.decode('utf-8'), file=output)
         for item in inventory[key]:
-            print(item, file=output)
+            print(item.decode('utf-8'), file=output)
         print('', file=output)
     content = output.getvalue()
     output.close()
@@ -212,6 +257,12 @@ def main():
     password = bosh_config['auth'][target]['password']
     # Read other parameters for the inventory
     inventory_params = os.getenv('BOSH_ANSIBLE_INVENTORY_PARAMS', '').split()
+    inventory_variables = os.getenv('BOSH_ANSIBLE_INVENTORY_VARS', '').split()
+    bosh_method = os.getenv('BOSH_ANSIBLE_INVENTORY_CALL', 'instances')
+    if bosh_method not in ['instances', 'vms']:
+        msg = "BOSH_ANSIBLE_INVENTORY_CALL must be 'instances' or 'vms'"
+        print("ERROR: " + msg, file=sys.stderr)
+        bosh_method = 'instances'
     target_deployment = os.getenv('BOSH_ANSIBLE_DEPLOYMENT', None)
     try:
         inventory_ip = abs(int(os.getenv('BOSH_ANSIBLE_INVENTORY_IP', '0')))
@@ -219,6 +270,12 @@ def main():
         msg = "BOSH_ANSIBLE_INVENTORY_IP must be positive integer, 0 to disable"
         print("ERROR: " + msg, file=sys.stderr)
         inventory_ip = 0
+    try:
+        inventory_instances = os.getenv('BOSH_ANSIBLE_INVENTORY_INSTANCES', 'dns')
+    except:
+        msg = "BOSH_ANSIBLE_INVENTORY_INSTANCES must be 'dns', 'vm_cid' ..."
+        print("ERROR: " + msg, file=sys.stderr)
+        inventory_instances = 'dns'
     # create a session
     session = requests.Session()
     session.auth = (username, password)
@@ -227,11 +284,15 @@ def main():
     # Doing the job
     if args.list:
         print(create_inventory(
-            session, target, target_deployment, inventory_ip, inventory_params)
+            session, target, target_deployment, inventory_ip,
+            inventory_instances, inventory_variables, inventory_params,
+            bosh_method)
         )
     else:
         print(create_ini(
-            session, target, target_deployment, inventory_ip, inventory_params)
+            session, target, target_deployment, inventory_ip, 
+            inventory_instances, inventory_variables, inventory_params,
+            bosh_method)
         )
     sys.exit(0)
 

@@ -37,17 +37,39 @@ pointing to the configuration file used by Bosh. It will read the credentials
 from the file. You can define additional inventory parameters with
 BOSH_ANSIBLE_INVENTORY_PARAMS environment variable, for example:
 BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap ansible_ssh_pass=blabla"
+Be aware that Python is not present in the default location, but you can
+use this variable to specify "ansible_python_interpreter=/path/to/python".
 
-The program will include the IP of each vm if DNS is not defined. To force 
-always the inclusion of the IP in the inventory, just define the variable
-BOSH_ANSIBLE_INVENTORY_IP as a positive integer indicating the index (starting
-from 1) of the IP which will be taken (for VMs with multiple IPs), 0 will
-disable the feature.
+The environment variable BOSH_ANSIBLE_INVENTORY_VARS defines a list of
+entries which can appear in the inventory as variables for each VM. The
+list of values is here:
+https://bosh.io/docs/director-api-v1.html#list-instances-detailed,
+for example BOSH_ANSIBLE_INVENTORY_VARS="state bootstrap" will add
+"state=started bootstrap=false" to each inventory entry.
+
+The environment variable BOSH_ANSIBLE_INVENTORY_INSTANCES, defines the name will
+appear in the inventory. If it 'dns' it will build the inventory with the
+dns names given by Bosh Director, if 'vm_cid' (default) it will be using the
+name of the VM as it is in the IaaS. You can see all parameters supported in
+https://bosh.io/docs/director-api-v1.html#list-instances-detailed
+
+In case of 'dns' the IP of each vm will be include if DNS is not defined in
+Bosh Director. To force always the inclusion of the IP in the inventory, 
+just define the variable BOSH_ANSIBLE_INVENTORY_IP as a positive integer 
+indicating the index (starting from 1) of the IP which will be taken 
+(for VMs with multiple IPs), 0 will disable the feature.
+
+BOSH_ANSIBLE_INVENTORY_CALL can be 'instances'(default) or 'vms'. 
+Instances is faster because it does not query the Bosh Agents, it gets the
+desired state. 'vms' will query the Bosh Agents in order to result the current
+state, so depending on the situation, it can take a lot of time to get the
+result. 'instances' includes references to errand jobs, but 'vms' will only show
+vms runnign on the IaaS.
 
 You can also limit the inventory to one deployment by setting the value
 of the environment variable BOSH_ANSIBLE_DEPLOYMENT to the name of it.
 
-0.2.2, 2016 Jose Riguera <jose.riguera@springer.com>
+0.3.0, 2017 Jose Riguera <jose.riguera@springer.com>
 ```
 
 To use it, just point the env variable `BOSH_CONFIG` to your
@@ -56,14 +78,17 @@ bosh configuration. It will read all parameters from there.
 
 By default, it will return an INI format inventory:
 ```
-$ export BOSH_CONFIG=~/.bosh-dev
+$ export BOSH_CONFIG=~/.bosh_config
 $ bosh-inventory > ansible-inventory
 ```
 
 Or using directly with ansible:
 ```
-$ export BOSH_CONFIG=~/.bosh-dev
+$ export BOSH_CONFIG=~/.bosh_config
 $ export BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap"
+$ export BOSH_ANSIBLE_INVENTORY_VARS="ansible_user=vcap"
+$ export BOSH_ANSIBLE_INVENTORY_CALL="vms"
+$ export BOSH_ANSIBLE_INVENTORY_INSTANCES="dns"
 $ export BOSH_ANSIBLE_INVENTORY_IP="1"
 $ ansible "runner_z*" -i $(which bosh-inventory) -a "sudo /sbin/reboot"
 ```
