@@ -176,7 +176,6 @@ ansible-playbook -i /usr/local/bin/bosh-inventory  cf-warden.yml
 
 # TODO
 
-* Add support for reading new bosh-cli v2 config files
 * Add support for Bosh director with UAA auth
 
 
