@@ -240,6 +240,54 @@ def create_ini(session, api, target_deployment=None, ip=1,
     return content
 
 
+def bosh_config_credentials():
+    credentials = {}
+    try:
+        bosh_config_file = os.path.expandvars(os.path.expanduser(os.getenv('BOSH_CONFIG', '~/.bosh_config')))
+        with open(bosh_config_file, 'r') as stream:
+            bosh_config = yaml.load(stream)
+    except Exception as e:
+        print("ERROR loading BOSH_CONFIG file '%s': %s" % (bosh_config_file, str(e)), file=sys.stderr)
+        return credentials
+    target = os.getenv('BOSH_ENVIRONMENT')
+    if 'environments' in bosh_config:
+        # bosh cli v2
+        if not target:
+            print("ERROR: No target specified via BOSH_ENVIRONMENT env variable", file=sys.stderr)
+            return credentials
+        environment = None
+        for e in bosh_config['environments']:
+            if target == e['url']:
+                environment = e
+                break
+        else:
+            print("ERROR: No target found in '%s'" % (bosh_config_file), file=sys.stderr)
+            return credentials
+        credentials['target'] = environment['url']
+        credentials['ca_cert'] = None
+        credentials['username'] = environment['username']
+        credentials['password'] = environment['password']
+    else:
+        if target:
+            try:
+                env = bosh_config['auth'][target]
+            except:
+                msg = "Bosh target not found: %s" % (target)
+                print("ERROR: " + msg, file=sys.stderr)
+                return credentials
+        else:
+            env = bosh_config['target']
+        credentials['target'] = env
+        credentials['ca_cert'] = bosh_config['ca_cert'][env]
+        credentials['username'] = bosh_config['auth'][env]['username']
+        credentials['password'] = bosh_config['auth'][env]['password']
+    env_url = requests.packages.urllib3.util.parse_url(credentials['target'])
+    env_port = env_url.port if env_url.port else 25555
+    env_proto = env_url.scheme if env_url.scheme else 'https'
+    credentials['target'] = "%s://%s:%d" % (env_proto, env_url.host, env_port)
+    return credentials
+
+
 def main():
     # Argument parsing
     epilog = __purpose__ + '\n'
@@ -252,17 +300,13 @@ def main():
         '--list', action='store_true', default=False,
          help='Enable JSON output for dynamic ansible inventory')
     args = parser.parse_args()
-    try:
-        bosh_config_file = os.environ['BOSH_CONFIG']
-        with open(bosh_config_file, 'r') as stream:
-            bosh_config = yaml.load(stream)
-    except Exception as e:
-        print("ERROR loading environment variable BOSH_CONFIG: %s" % str(e), file=sys.stderr)
+    credentials = bosh_config_credentials()
+    if not credentials:
         sys.exit(1)
-    target = bosh_config['target']
-    ca_cert = bosh_config['ca_cert'][target]
-    username = bosh_config['auth'][target]['username']
-    password = bosh_config['auth'][target]['password']
+    target = credentials['target']
+    ca_cert = credentials['ca_cert']
+    username = credentials['username']
+    password = credentials['password']
     # Read other parameters for the inventory
     inventory_params = os.getenv('BOSH_ANSIBLE_INVENTORY_PARAMS', '').split()
     inventory_variables = os.getenv('BOSH_ANSIBLE_INVENTORY_VARS', '').split()
