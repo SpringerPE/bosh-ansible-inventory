@@ -8,20 +8,21 @@ instances managed by a BOSH Director.
 from __future__ import unicode_literals, print_function
 
 __program__ = "bosh-inventory"
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 __author__ = "Jose Riguera"
 __year__ = "2017"
 __email__ = "<jose.riguera@springer.com>"
 __license__ = "MIT"
 __purpose__ = """
-In order to use bosh-inventory, you have to define BOSH_CONFIG environment
-variable pointing to the configuration file used by Bosh. It will read the
-credentials from the file. You can define additional inventory parameters
-via BOSH_ANSIBLE_INVENTORY_PARAMS environment variable, for example:
-BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap ansible_ssh_pass=blabla".
-Be aware that maybe Python2 (required by ansible) is not present in the
-default location, but you can use this variable to specify
-"ansible_python_interpreter=/path/to/python".
+bosh-inventory reads BOSH_CONFIG environment variable pointing to the configuration
+file used by Bosh client (defaults to '~/.bosh/config' or '~/.bosh_config') in
+order to get the credentials from it. You can define additional inventory
+parameters via BOSH_ANSIBLE_INVENTORY_PARAMS environment variable, for example:
+BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap ansible_ssh_pass=blabla". Be aware
+that maybe Python2 (required by ansible) is not present in the default location,
+but you can use this variable to specify "ansible_python_interpreter=/path/to/python".
+If you use Bosh cli v2, you also will need to define the variable
+BOSH_ENVIRONMENT in order to targe the correct director.
 
 The environment variable BOSH_ANSIBLE_INVENTORY_VARS defines a list of
 entries which can appear as inventory variables for each VM. The list of values
@@ -39,7 +40,7 @@ https://bosh.io/docs/director-api-v1.html#list-instances-detailed.
 To force always the inclusion of the IP in the inventory,  just define the
 variable BOSH_ANSIBLE_INVENTORY_IP as a positive integer indicating the index 
 (starting from 1) of the IP which will be taken (for VMs with multiple IPs),
-0 disabled the feature.
+0 disabled the feature. The default value for BOSH_ANSIBLE_INVENTORY_IP is 1.
 
 BOSH_ANSIBLE_INVENTORY_CALL defines the way the inventoy is populated. It can
 be 'instances'(default) or 'vms'. Instances is faster because it does not query
@@ -118,6 +119,10 @@ def get_deployments(session, api):
     return result
 
 
+def logger(msg, level="WARNING"):
+    print(level + ": " + msg, file=sys.stderr)
+
+
 def get_instance_inventory_name(instance, instance_name_key, job):
     # With ip, where ip represents an index in the list
     # If it is zero, it will be disabled disabled.
@@ -127,8 +132,7 @@ def get_instance_inventory_name(instance, instance_name_key, job):
         else:
             entry = instance[instance_name_key]
     except Exception as e:
-        msg = "Could not get name for %s" % (instance['vm_cid'], str(e))
-        print("WARNING: " + msg, file=sys.stderr)
+        logger("Could not get name for %s" % (instance['vm_cid'], str(e)))
         entry = job + '-' + str(instance['index'])
     return entry
 
@@ -137,8 +141,7 @@ def get_instance_inventory_ip(instance, index=0):
     try:
         ip = instance['ips'][index - 1]
     except:
-        msg = "IP index out of range (%s) for %s" % (index - 1, instance['vm_cid'])
-        print("WARNING: " + msg, file=sys.stderr)
+        logger("IP index out of range (%s) for %s" % (index - 1, instance['vm_cid']))
         ip = instance['ips'][0]
     return ip
 
@@ -182,8 +185,7 @@ def create_inventory(session, api, target_deployment=None, ip=1,
                     try:
                         inventory["_meta"]["hostvars"][entry][str(variable)] = str(instance[variable])
                     except:
-                        msg = "Could not add variable '%s' to %s" % (str(variable), instance['vm_cid'])
-                        print("WARNING: " + msg, file=sys.stderr)
+                        logger("Could not add variable '%s' to %s" % (variable, instance['vm_cid']))
                 for item in params:
                     param = item.split('=')
                     inventory["_meta"]["hostvars"][entry][param[0]] = param[1]
@@ -224,8 +226,7 @@ def create_ini(session, api, target_deployment=None, ip=1,
                     try:
                         entry = entry + " %s='%s'" % (variable, instance[variable])
                     except:
-                        msg = "Could not add variable '%s' to %s" % (str(variable), instance['vm_cid'])
-                        print("WARNING: " + msg, file=sys.stderr)
+                        logger("Could not add variable '%s' to %s" % (variable, instance['vm_cid']))
                 entry = entry + ' ' + ' '.join(params)
                 inventory[job_key].append(entry)
     output = StringIO()
@@ -240,29 +241,33 @@ def create_ini(session, api, target_deployment=None, ip=1,
     return content
 
 
-def bosh_config_credentials():
+def bosh_config_credentials(cfgfiles=['~/.bosh/config', '~/.bosh_config']):
     credentials = {}
     try:
-        bosh_config_file = os.path.expandvars(os.path.expanduser(os.getenv('BOSH_CONFIG', '~/.bosh_config')))
+        if os.getenv('BOSH_CONFIG'):
+            cfgfiles = [os.getenv('BOSH_CONFIG')]
+        for cfgfile in cfgfiles:
+            bosh_config_file = os.path.expandvars(os.path.expanduser(cfgfile))
+            if os.path.isfile(bosh_config_file):
+                break
+        else:
+            raise ValueError("Cannot find Bosh config file '%s'" % (bosh_config_file))
         with open(bosh_config_file, 'r') as stream:
             bosh_config = yaml.load(stream)
     except Exception as e:
-        print("ERROR loading BOSH_CONFIG file '%s': %s" % (bosh_config_file, str(e)), file=sys.stderr)
-        return credentials
+        raise ValueError("Cannot load Bosh config file '%s': %s" % (bosh_config_file, str(e)))
     target = os.getenv('BOSH_ENVIRONMENT')
     if 'environments' in bosh_config:
         # bosh cli v2
         if not target:
-            print("ERROR: No target specified via BOSH_ENVIRONMENT env variable", file=sys.stderr)
-            return credentials
+            raise ValueError("No target specified via BOSH_ENVIRONMENT env variable")
         environment = None
         for e in bosh_config['environments']:
             if target == e['url']:
                 environment = e
                 break
         else:
-            print("ERROR: No target found in '%s'" % (bosh_config_file), file=sys.stderr)
-            return credentials
+            raise ValueError("No target found in '%s'" % (bosh_config_file))
         credentials['target'] = environment['url']
         credentials['ca_cert'] = None
         credentials['username'] = environment['username']
@@ -272,9 +277,7 @@ def bosh_config_credentials():
             try:
                 env = bosh_config['auth'][target]
             except:
-                msg = "Bosh target not found: %s" % (target)
-                print("ERROR: " + msg, file=sys.stderr)
-                return credentials
+                raise ValueError("Bosh target not found: %s" % (target))
         else:
             env = bosh_config['target']
         credentials['target'] = env
@@ -300,8 +303,10 @@ def main():
         '--list', action='store_true', default=False,
          help='Enable JSON output for dynamic ansible inventory')
     args = parser.parse_args()
-    credentials = bosh_config_credentials()
-    if not credentials:
+    try:
+        credentials = bosh_config_credentials()
+    except Exception as e:
+        logger(str(e), "ERROR")
         sys.exit(1)
     target = credentials['target']
     ca_cert = credentials['ca_cert']
@@ -312,21 +317,18 @@ def main():
     inventory_variables = os.getenv('BOSH_ANSIBLE_INVENTORY_VARS', '').split()
     bosh_method = os.getenv('BOSH_ANSIBLE_INVENTORY_CALL', 'instances')
     if bosh_method not in ['instances', 'vms']:
-        msg = "BOSH_ANSIBLE_INVENTORY_CALL must be 'instances' or 'vms'"
-        print("ERROR: " + msg, file=sys.stderr)
-        bosh_method = 'instances'
+        logger("BOSH_ANSIBLE_INVENTORY_CALL must be 'instances' or 'vms'", "ERROR")
+        sys.exit(1)
     target_deployment = os.getenv('BOSH_ANSIBLE_DEPLOYMENT', None)
     try:
-        inventory_ip = abs(int(os.getenv('BOSH_ANSIBLE_INVENTORY_IP', '0')))
+        inventory_ip = abs(int(os.getenv('BOSH_ANSIBLE_INVENTORY_IP', '1')))
     except:
-        msg = "BOSH_ANSIBLE_INVENTORY_IP must be positive integer, 0 to disable"
-        print("ERROR: " + msg, file=sys.stderr)
-        inventory_ip = 0
+        logger("BOSH_ANSIBLE_INVENTORY_IP must be positive integer, 0 to disable", "ERROR")
+        sys.exit(1)
     try:
-        inventory_instances = os.getenv('BOSH_ANSIBLE_INVENTORY_INSTANCES', 'dns')
+        inventory_instances = os.getenv('BOSH_ANSIBLE_INVENTORY_INSTANCES', 'vm_cid')
     except:
-        msg = "BOSH_ANSIBLE_INVENTORY_INSTANCES must be 'dns', 'vm_cid' ..."
-        print("ERROR: " + msg, file=sys.stderr)
+        logger("BOSH_ANSIBLE_INVENTORY_INSTANCES must be 'dns', 'vm_cid' ...")
         inventory_instances = 'dns'
     # create a session
     session = requests.Session()
