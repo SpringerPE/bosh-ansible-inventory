@@ -32,14 +32,15 @@ optional arguments:
   -h, --help  show this help message and exit
   --list      Enable JSON output for dynamic ansible inventory
 
-In order to use bosh-inventory, you have to define BOSH_CONFIG environment
-variable pointing to the configuration file used by Bosh. It will read the
-credentials from the file. You can define additional inventory parameters
-via BOSH_ANSIBLE_INVENTORY_PARAMS environment variable, for example:
-BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap ansible_ssh_pass=blabla".
-Be aware that maybe Python2 (required by ansible) is not present in the
-default location, but you can use this variable to specify
-"ansible_python_interpreter=/path/to/python".
+bosh-inventory reads BOSH_CONFIG environment variable pointing to the configuration
+file used by Bosh client (defaults to '~/.bosh/config' or '~/.bosh_config') in
+order to get the credentials from it. You can define additional inventory
+parameters via BOSH_ANSIBLE_INVENTORY_PARAMS environment variable, for example:
+BOSH_ANSIBLE_INVENTORY_PARAMS="ansible_user=vcap ansible_ssh_pass=blabla". Be aware
+that maybe Python2 (required by ansible) is not present in the default location,
+but you can use this variable to specify "ansible_python_interpreter=/path/to/python".
+If you use Bosh cli v2, you also will need to define the variable
+BOSH_ENVIRONMENT in order to targe the correct director.
 
 The environment variable BOSH_ANSIBLE_INVENTORY_VARS defines a list of
 entries which can appear as inventory variables for each VM. The list of values
@@ -57,7 +58,7 @@ https://bosh.io/docs/director-api-v1.html#list-instances-detailed.
 To force always the inclusion of the IP in the inventory,  just define the
 variable BOSH_ANSIBLE_INVENTORY_IP as a positive integer indicating the index 
 (starting from 1) of the IP which will be taken (for VMs with multiple IPs),
-0 disabled the feature.
+0 disabled the feature. The default value for BOSH_ANSIBLE_INVENTORY_IP is 1.
 
 BOSH_ANSIBLE_INVENTORY_CALL defines the way the inventoy is populated. It can
 be 'instances'(default) or 'vms'. Instances is faster because it does not query
