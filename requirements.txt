@@ -1,2 +1,2 @@
-requests>=2.18.0,<=2.19.0
+requests>=2.20.0
 PyYAML>=3.11

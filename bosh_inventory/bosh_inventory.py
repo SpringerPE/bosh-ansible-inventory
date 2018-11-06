@@ -8,7 +8,7 @@ instances managed by a BOSH Director.
 from __future__ import unicode_literals, print_function
 
 __program__ = "bosh-inventory"
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __author__ = "Jose Riguera"
 __year__ = "2017"
 __email__ = "<jose.riguera@springer.com>"
