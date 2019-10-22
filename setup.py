@@ -15,7 +15,7 @@ import re
 
 
 requirements=[
-  "requests>=2.20.0"
+  "requests>=2.20.0",
   "PyYAML>=3.11"
 ]
 
@@ -52,6 +52,7 @@ setup(
     keywords='bosh ansible inventory',
     description="Ansible dynamic inventory for bosh deployments",
     long_description=find_readme(),
+    long_description_content_type="text/markdown",
     author="Jose Riguera Lopez",
     author_email="jose.riguera@springer.com",
     license='MIT',
